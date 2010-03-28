@@ -12,45 +12,47 @@ Catalyst::Authentication::Realm::Adaptor - Adjust parameters of authentication p
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+## goes in catagits@jules.scsys.co.uk:Catalyst-Authentication-Realm-Adaptor.git
+
+our $VERSION = '0.02';
 
 sub authenticate {
     my ( $self, $c, $authinfo ) = @_;
 
     my $newauthinfo;
-        
+
     if (exists($self->config->{'credential_adaptor'})) {
-        
+
         if ($self->config->{'credential_adaptor'}{'method'} eq 'merge_hash') {
-        
+
             $newauthinfo = _munge_hash($authinfo, $self->config->{'credential_adaptor'}{'merge_hash'}, $authinfo);
-            
+
         } elsif ($self->config->{'credential_adaptor'}{'method'} eq 'new_hash') {
-            
+
             $newauthinfo = _munge_hash({}, $self->config->{'credential_adaptor'}{'new_hash'}, $authinfo);
-        
+
         } elsif ($self->config->{'credential_adaptor'}{'method'} eq 'action') {
-        
+
             my $controller = $c->controller($self->config->{'credential_adaptor'}{'controller'});
             if (!$controller) {
-                Catalyst::Exception->throw(__PACKAGE__ . " realm: " . $self->name . "'s credential_adaptor tried to use a controller that doesn't exist: " . 
+                Catalyst::Exception->throw(__PACKAGE__ . " realm: " . $self->name . "'s credential_adaptor tried to use a controller that doesn't exist: " .
                                             $self->config->{'credential_adaptor'}{'controller'});
-            } 
-        
+            }
+
             my $action = $controller->action_for($self->config->{'credential_adaptor'}{'action'});
             if (!$action) {
-                Catalyst::Exception->throw(__PACKAGE__ . " realm: " . $self->name . "'s credential_adaptor tried to use an action that doesn't exist: " . 
+                Catalyst::Exception->throw(__PACKAGE__ . " realm: " . $self->name . "'s credential_adaptor tried to use an action that doesn't exist: " .
                                             $self->config->{'credential_adaptor'}{'controller'} . "->" .
                                             $self->config->{'credential_adaptor'}{'action'});
             }
             $newauthinfo = $c->forward($action, $self->name, $authinfo, $self->config->{'credential_adaptor'});
-        
+
         } elsif ($self->config->{'credential_adaptor'}{'method'} eq 'code' ) {
-        
+
             if (ref($self->config->{'credential_adaptor'}{'code'}) eq 'CODE') {
                 my $sub = $self->config->{'credential_adaptor'}{'code'};
                 $newauthinfo = $sub->($self->name, $authinfo, $self->config->{'credential_adaptor'});
@@ -68,35 +70,35 @@ sub find_user {
     my ( $self, $authinfo, $c ) = @_;
 
     my $newauthinfo;
-        
+
     if (exists($self->config->{'store_adaptor'})) {
-        
+
         if ($self->config->{'store_adaptor'}{'method'} eq 'merge_hash') {
-        
+
             $newauthinfo = _munge_hash($authinfo, $self->config->{'store_adaptor'}{'merge_hash'}, $authinfo);
-            
+
         } elsif ($self->config->{'store_adaptor'}{'method'} eq 'new_hash') {
-            
+
             $newauthinfo = _munge_hash({}, $self->config->{'store_adaptor'}{'new_hash'}, $authinfo);
-        
+
         } elsif ($self->config->{'store_adaptor'}{'method'} eq 'action') {
-        
+
             my $controller = $c->controller($self->config->{'store_adaptor'}{'controller'});
             if (!$controller) {
-                Catalyst::Exception->throw(__PACKAGE__ . " realm: " . $self->name . "'s store_adaptor tried to use a controller that doesn't exist: " . 
+                Catalyst::Exception->throw(__PACKAGE__ . " realm: " . $self->name . "'s store_adaptor tried to use a controller that doesn't exist: " .
                                             $self->config->{'store_adaptor'}{'controller'});
-            } 
-        
+            }
+
             my $action = $controller->action_for($self->config->{'store_adaptor'}{'action'});
             if (!$action) {
-                Catalyst::Exception->throw(__PACKAGE__ . " realm: " . $self->name . "'s store_adaptor tried to use an action that doesn't exist: " . 
+                Catalyst::Exception->throw(__PACKAGE__ . " realm: " . $self->name . "'s store_adaptor tried to use an action that doesn't exist: " .
                                             $self->config->{'store_adaptor'}{'controller'} . "->" .
                                             $self->config->{'store_adaptor'}{'action'});
             }
             $newauthinfo = $c->forward($action, $self->name, $authinfo, $self->config->{'store_adaptor'});
-        
+
         } elsif ($self->config->{'store_adaptor'}{'method'} eq 'code' ) {
-        
+
             if (ref($self->config->{'store_adaptor'}{'code'}) eq 'CODE') {
                 my $sub = $self->config->{'store_adaptor'}{'code'};
                 $newauthinfo = $sub->($self->name, $authinfo, $self->config->{'store_adaptor'});
@@ -104,17 +106,17 @@ sub find_user {
                 Catalyst::Exception->throw(__PACKAGE__ . " realm: " . $self->name . "'s store_adaptor is configured to use a code ref that doesn't exist");
             }
         }
-        return $self->SUPER::find_user($c, $newauthinfo);
+        return $self->SUPER::find_user($newauthinfo, $c);
     } else {
-        return $self->SUPER::find_user($c, $authinfo);
+        return $self->SUPER::find_user($authinfo, $c);
     }
 }
 
 sub _munge_hash {
     my ($sourcehash, $modhash, $referencehash) = @_;
-    
+
     my $resulthash = { %{$sourcehash} };
-    
+
     foreach my $key (keys %{$modhash}) {
         if (ref($modhash->{$key}) eq 'HASH') {
             if (ref($sourcehash->{$key}) eq 'HASH') {
@@ -126,7 +128,7 @@ sub _munge_hash {
             if (ref($modhash->{$key} eq 'ARRAY') && ref($sourcehash->{$key}) eq 'ARRAY') {
                 push @{$resulthash->{$key}}, _munge_value($modhash->{$key}, $referencehash)
             }
-            $resulthash->{$key} = _munge_value($modhash->{$key}, $referencehash); 
+            $resulthash->{$key} = _munge_value($modhash->{$key}, $referencehash);
             if (ref($resulthash->{$key}) eq 'SCALAR' && ${$resulthash->{$key}} eq '-') {
                 ## Scalar reference to a string '-' means delete the element from the source array.
                 delete($resulthash->{$key});
@@ -138,12 +140,12 @@ sub _munge_hash {
 
 sub _munge_value {
     my ($modvalue, $referencehash) = @_;
-    
+
     my $newvalue;
     if ($modvalue =~ m/^([+-])\((.*)\)$/) {
         my $action = $1;
         my $keypath = $2;
-        ## do magic 
+        ## do magic
         if ($action eq '+') {
             ## action = string '-' means delete the element from the source array.
             ## otherwise it means copy it from a field in the original hash with nesting
@@ -174,7 +176,7 @@ sub _munge_value {
                 ## this is the first time I've ever wanted  to use unless
                 ## to make things clearer
                 unless (ref($val) eq 'SCALAR' && ${$val} eq '-') {
-                    $newvalue->[$row] = $val;                    
+                    $newvalue->[$row] = $val;
                 }
             }
         }
@@ -242,16 +244,16 @@ If you don't know what the above means, you probably do not need this module.
 =head1 CONFIGURATION
 
 The configuration for this module goes within your realm configuration alongside your
-credential and store options.  
+credential and store options.
 
-This module can operate in two points during authentication processing. 
+This module can operate in two points during authentication processing.
 The first is prior the realm's C<authenticate> call (immediately after the call to
 C<< $c->authenticate() >>.) To operate here, your filter options should go in a hash
 under the key C<credential_adaptor>.
 
 The second point is after the call to credential's C<authenticate> method but
-immediately before the call to the user store's C<find_user> method. To operate 
-prior to C<find_user>, your filter options should go in a hash under the key 
+immediately before the call to the user store's C<find_user> method. To operate
+prior to C<find_user>, your filter options should go in a hash under the key
 C<store_adaptor>.
 
 The filtering options for both points are the same, and both the C<store_adaptor> and
@@ -259,7 +261,7 @@ C<credential_adaptor> can be used simultaneously in a single realm.
 
 =head2 method
 
-There are four ways to configure your filters.  You specify which one you want by setting 
+There are four ways to configure your filters.  You specify which one you want by setting
 the C<method> configuration option to one of the following: C<merge_hash>, C<new_hash>,
 C<code>, or C<action>.  You then provide the additional information based on which method
 you have chosen.  The different options are described below.
@@ -274,7 +276,7 @@ you have chosen.  The different options are described below.
          status => [ 'temporary', 'active' ]
      }
  }
- 
+
 This causes the original authinfo hash to be merged with a hash provided by
 the realm configuration under the key C<merge_hash> key. This is a deep merge
 and in the case of a conflict, the hash specified by merge_hash takes
@@ -287,11 +289,11 @@ method of merging is described in detail in the L<HASH MERGING> section below.
      method => 'new_hash',
      new_hash => {
          username => '+(user)',  # this sets username to the value of $originalhash{user}
-         user_source => 'openid' 
+         user_source => 'openid'
      }
  }
- 
-This causes the original authinfo hash to be set aside and replaced with a new hash provided under the 
+
+This causes the original authinfo hash to be set aside and replaced with a new hash provided under the
 C<new_hash> key. The new hash can grab portions of the original hash.  This can be used to remap the authinfo
 into a new format.  See the L<HASH MERGING> section for information on how to do this.
 
@@ -303,7 +305,7 @@ into a new format.  See the L<HASH MERGING> section for information on how to do
          my ($realmname, $original_authinfo, $hashref_to_config ) = @_;
          my $newauthinfo = {};
          ## do something
-         return $newauthinfo; 
+         return $newauthinfo;
      }
  }
 
@@ -321,11 +323,11 @@ credential_adaptor, you'd get the credential_adapter config instead.
      controller => 'UserProcessing',
      action => 'FilterCredentials'
  }
- 
+
 The C<action> method causes the adaptor to delegate filtering to a Catalyst
 action. This is similar to the code ref above, except that instead of simply
 calling the routine, the action specified is called via C<<$c->forward>>. The
-arguments passed to the action are the same as the code method as well, 
+arguments passed to the action are the same as the code method as well,
 namely the realm name, the original authinfo hash and the config for the adaptor.
 
 =back
@@ -341,8 +343,8 @@ merge_hash taking precedence in the case of a key conflict. If there are
 sub-hashes they are merged as well.
 
 If both the source and merge hash contain an array for a given hash-key, the
-values in the merge array are appended to the original array.  Note that hashes 
-within arrays will not be merged, and will instead simply be copied.  
+values in the merge array are appended to the original array.  Note that hashes
+within arrays will not be merged, and will instead simply be copied.
 
 Simple values are left intact, and in the case of a key existing in both
 hashes, the value from the merge_hash takes precedence. Note that in the case
@@ -353,15 +355,15 @@ them.
 =head2 Advanced merging
 
 Whether you are using C<merge_hash> or C<new_hash> as the method, you have access
-to the values from the original authinfo hash.  In your new or merged hash, you 
-can use values from anywhere within the original hash.  You do this by setting 
+to the values from the original authinfo hash.  In your new or merged hash, you
+can use values from anywhere within the original hash.  You do this by setting
 the value for the key you want to set to a special string indicating the key
-path in the original hash.  The string is formatted as follows: 
+path in the original hash.  The string is formatted as follows:
 C<<'+(key1.key2.key3)'>>  This will grab the hash associated with key1, retrieve the hash
 associated with key2, and finally obtain the value associated with key3.  This is easier to
 show than to explain:
 
- my $originalhash = { 
+ my $originalhash = {
                         user => {
                                 details => {
                                     age       => 27,
@@ -370,15 +372,15 @@ show than to explain:
                                 }
                         }
                     };
-                    
-  my $newhash = { 
+
+  my $newhash = {
                     # would result in a value of 'black'
-                    haircolor => '+(user.details.haircolor)',   
-                    
+                    haircolor => '+(user.details.haircolor)',
+
                     # bestnumber would be 42.
-                    bestnumber => '+(user.details.favoritenumbers.1)' 
+                    bestnumber => '+(user.details.favoritenumbers.1)'
                 }
-                    
+
 Given the example above, the value for the userage key would be 27, (obtained
 via C<<'+(user.details.age)'>>) and the value for bestnumber would be 42. Note
 that you can traverse both hashes and arrays using this method. This can be
@@ -387,22 +389,22 @@ them under different keys.
 
 When using the C<merge_hash> method, you sometimes may want to remove an item
 from the original hash. You can do this by providing a key in your merge_hash
-at the same point, but setting it's value to '-()'.  This will remove the key 
+at the same point, but setting it's value to '-()'.  This will remove the key
 entirely from the resultant hash.  This works better than simply setting the
 value to undef in some cases.
 
 =head1 NOTES and CAVEATS
 
-The authentication system for Catalyst is quite flexible.  In most cases this 
+The authentication system for Catalyst is quite flexible.  In most cases this
 module is not needed.  Evidence of this fact is that the Catalyst auth system
 was substantially unchanged for 2+ years prior to this modules first release.
 If you are looking at this module, then there is a good chance your problem would
-be better solved by adjusting your credential or store directly.  
+be better solved by adjusting your credential or store directly.
 
-That said, there are some areas where this module can be particularly useful. 
+That said, there are some areas where this module can be particularly useful.
 For example, this module allows for global application of additional arguments
 to authinfo for a certain realm via your config.  It also allows for preliminary
-testing of alternate configs before you adjust every C<< $c->authenticate() >> call 
+testing of alternate configs before you adjust every C<< $c->authenticate() >> call
 within your application.
 
 It is also useful when combined with the various external authentication
@@ -414,22 +416,22 @@ impossible normally. With the Adapter realm, you can massage the authinfo hash
 between the credential's verification and the creation of the local user, and
 instead use the information returned to look up a user instead.
 
-Using the external auth mechanisms and the C<action> method, you can actually 
-trigger an action to create a user record on the fly when the user has 
+Using the external auth mechanisms and the C<action> method, you can actually
+trigger an action to create a user record on the fly when the user has
 authenticated via an external method.  These are just some of the possibilities
 that Adaptor provides that would otherwise be very difficult to accomplish,
 even with Catalyst's flexible authentication system.
 
 With all of that said, caution is warranted when using this module.  It modifies
 the behavior of the application in ways that are not obvious and can therefore
-lead to extremely hard to track-down bugs.  This is especially true when using 
-the C<action> filter method.  When a developer calls C<< $c->authenticate() >> 
-they are not expecting any actions to be called before it returns.  
+lead to extremely hard to track-down bugs.  This is especially true when using
+the C<action> filter method.  When a developer calls C<< $c->authenticate() >>
+they are not expecting any actions to be called before it returns.
 
 If you use the C<action> method, I strongly recommend that you use it only as a
-filter routine and do not do other catalyst dispatch related activities (such as 
+filter routine and do not do other catalyst dispatch related activities (such as
 further forwards, detach's or redirects).  Also note that it is B<EXTREMELY
-DANGEROUS> to call authentication routines from within a filter action.  It is 
+DANGEROUS> to call authentication routines from within a filter action.  It is
 extremely easy to accidentally create an infinite recursion bug which can crash
 your Application.  In short - B<DON'T DO IT>.
 
@@ -439,15 +441,9 @@ Jay Kuri, C<< <jayk at cpan.org> >>
 
 =head1 BUGS
 
-Probably several. There are no automated tests for this module yet. It's being
-released to force the issue and cause someone, probably me, to write tests. If
-you like it, want it to do other things, or find things it's supposed to do
-that it does not, please report it to
-C<bug-catalyst-authentication-realm-adaptor at rt.cpan.org>, or through the
-web interface at
-L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Catalyst-Authentication-Realm-Adaptor>.
-I will be notified, and then you'll automatically be notified of progress on
-your bug as I make changes.
+Please report any bugs or feature requests to C<bug-catalyst-authentication-realm-adaptor at rt.cpan.org>, or through
+the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Catalyst-Authentication-Realm-Adaptor>.  I will be notified, and then you'll
+automatically be notified of progress on your bug as I make changes.
 
 
 =head1 SUPPORT
